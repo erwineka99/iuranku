@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HouseController;
+use App\Http\Controllers\Api\ResidentController;
 use Illuminate\Support\Facades\Route;
 
 // endpoint cek apakah server jalan
@@ -17,4 +18,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // modul rumah
     Route::apiResource('houses', HouseController::class);
+
+    // modul penghuni
+    Route::apiResource('residents', ResidentController::class);
 });
