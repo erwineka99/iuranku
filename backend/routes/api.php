@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\FeeTypeController;
 use App\Http\Controllers\Api\HouseController;
 use App\Http\Controllers\Api\HouseResidentController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ResidentController;
 use Illuminate\Support\Facades\Route;
 
@@ -44,4 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // modul pengeluaran
     Route::apiResource('expenses', ExpenseController::class);
+
+    // modul laporan
+    Route::get('reports/dashboard', [ReportController::class, 'dashboard']);
+    Route::get('reports/summary', [ReportController::class, 'summary']);
+    Route::get('reports/monthly', [ReportController::class, 'monthly']);
 });
