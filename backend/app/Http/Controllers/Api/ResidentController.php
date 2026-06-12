@@ -100,8 +100,8 @@ class ResidentController extends Controller
                 'current_house'  => $currentHouseData,
                 'house_history'  => $houseHistory,
                 'payment_summary' => [
-                    'total_paid'   => 0,
-                    'total_unpaid' => 0,
+                    'total_paid'   => \App\Models\Bill::where('resident_id', $resident->id)->where('status', 'paid')->count(),
+                    'total_unpaid' => \App\Models\Bill::where('resident_id', $resident->id)->where('status', 'unpaid')->count(),
                 ],
                 'created_at' => $resident->created_at,
             ],

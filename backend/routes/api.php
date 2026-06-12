@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillController;
+use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\FeeTypeController;
 use App\Http\Controllers\Api\HouseController;
 use App\Http\Controllers\Api\HouseResidentController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ResidentController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,4 +38,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // modul tagihan — generate harus didaftarkan sebelum apiResource agar tidak bertabrakan dengan {bill}
     Route::post('bills/generate', [BillController::class, 'generate']);
     Route::apiResource('bills', BillController::class)->except(['update']);
+
+    // modul pembayaran
+    Route::apiResource('payments', PaymentController::class)->except(['update']);
+
+    // modul pengeluaran
+    Route::apiResource('expenses', ExpenseController::class);
 });
