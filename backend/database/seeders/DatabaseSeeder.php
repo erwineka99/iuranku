@@ -18,5 +18,9 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('iuranku123'),
             ]
         );
+
+        $this->call([
+            FeeTypeSeeder::class,
+        ]);
     }
 }
