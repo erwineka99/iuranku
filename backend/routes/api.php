@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HouseController;
+use App\Http\Controllers\Api\HouseResidentController;
 use App\Http\Controllers\Api\ResidentController;
 use Illuminate\Support\Facades\Route;
 
@@ -21,4 +22,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // modul penghuni
     Route::apiResource('residents', ResidentController::class);
+
+    // modul riwayat penghuni rumah
+    Route::get('houses/{house}/residents', [HouseResidentController::class, 'index']);
+    Route::post('houses/{house}/residents', [HouseResidentController::class, 'store']);
+    Route::put('houses/{house}/residents/{houseResident}/checkout', [HouseResidentController::class, 'checkout']);
 });

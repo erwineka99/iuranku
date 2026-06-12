@@ -37,7 +37,31 @@ test('dapat mengambil daftar penghuni', function () {
     $this->withToken($token)
         ->getJson('/api/residents')
         ->assertOk()
-        ->assertJsonCount(3);
+        ->assertJsonCount(3, 'data')
+        ->assertJsonStructure(['data', 'meta' => ['total', 'permanent', 'contract']]);
+});
+
+test('dapat filter penghuni berdasarkan resident_type', function () {
+    $token = adminToken();
+    Resident::factory()->count(2)->create(['resident_type' => 'permanent']);
+    Resident::factory()->count(1)->create(['resident_type' => 'contract']);
+
+    $this->withToken($token)
+        ->getJson('/api/residents?resident_type=permanent')
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
+});
+
+test('dapat search penghuni berdasarkan nama', function () {
+    $token = adminToken();
+    Resident::factory()->create(['full_name' => 'Budi Cari Ini']);
+    Resident::factory()->create(['full_name' => 'Siti Bukan Ini']);
+
+    $this->withToken($token)
+        ->getJson('/api/residents?search=Cari')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.full_name', 'Budi Cari Ini');
 });
 
 // ── POST /api/residents ───────────────────────────────────────────────────────
@@ -48,7 +72,8 @@ test('dapat menambah penghuni baru', function () {
     $this->withToken($token)
         ->postJson('/api/residents', residentPayload())
         ->assertStatus(201)
-        ->assertJsonFragment(['full_name' => 'Budi Santoso', 'phone' => '08123456789']);
+        ->assertJsonFragment(['full_name' => 'Budi Santoso', 'phone' => '08123456789'])
+        ->assertJsonStructure(['message', 'data' => ['id', 'full_name', 'phone', 'ktp_photo_url', 'current_house']]);
 
     $this->assertDatabaseHas('residents', ['phone' => '08123456789']);
 });
@@ -62,9 +87,11 @@ test('dapat menambah penghuni dengan upload foto KTP', function () {
     $response = $this->withToken($token)
         ->postJson('/api/residents', array_merge(residentPayload(), ['ktp_photo' => $file]))
         ->assertStatus(201)
-        ->assertJsonStructure(['ktp_photo']);
+        ->assertJsonStructure(['data' => ['ktp_photo_url']]);
 
-    $ktpPath = $response->json('ktp_photo');
+    // ambil path dari URL yang dikembalikan
+    $ktpUrl = $response->json('data.ktp_photo_url');
+    $ktpPath = ltrim(parse_url($ktpUrl, PHP_URL_PATH), '/storage/');
     Storage::disk('public')->assertExists($ktpPath);
 });
 
@@ -117,7 +144,11 @@ test('dapat mengambil detail penghuni', function () {
     $this->withToken($token)
         ->getJson("/api/residents/{$resident->id}")
         ->assertOk()
-        ->assertJsonFragment(['id' => $resident->id]);
+        ->assertJsonPath('data.id', $resident->id)
+        ->assertJsonStructure(['data' => [
+            'id', 'full_name', 'phone', 'ktp_photo_url',
+            'current_house', 'house_history', 'payment_summary',
+        ]]);
 });
 
 test('detail penghuni yang tidak ada mengembalikan 404', function () {
@@ -140,7 +171,8 @@ test('dapat mengubah data penghuni', function () {
             'phone'     => $resident->phone,
         ]))
         ->assertOk()
-        ->assertJsonFragment(['full_name' => 'Nama Baru']);
+        ->assertJsonPath('data.full_name', 'Nama Baru')
+        ->assertJsonStructure(['message', 'data' => ['id', 'full_name', 'ktp_photo_url', 'updated_at']]);
 
     $this->assertDatabaseHas('residents', ['full_name' => 'Nama Baru']);
 });
@@ -151,7 +183,8 @@ test('edit penghuni boleh pakai phone miliknya sendiri', function () {
 
     $this->withToken($token)
         ->putJson("/api/residents/{$resident->id}", residentPayload(['phone' => '08199999999']))
-        ->assertOk();
+        ->assertOk()
+        ->assertJsonStructure(['message', 'data']);
 });
 
 test('edit penghuni gagal jika phone milik penghuni lain', function () {
