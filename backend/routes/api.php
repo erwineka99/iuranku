@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BillController;
 use App\Http\Controllers\Api\FeeTypeController;
 use App\Http\Controllers\Api\HouseController;
 use App\Http\Controllers\Api\HouseResidentController;
@@ -31,4 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // modul jenis iuran
     Route::apiResource('fee-types', FeeTypeController::class)->except(['show']);
+
+    // modul tagihan — generate harus didaftarkan sebelum apiResource agar tidak bertabrakan dengan {bill}
+    Route::post('bills/generate', [BillController::class, 'generate']);
+    Route::apiResource('bills', BillController::class)->except(['update']);
 });
