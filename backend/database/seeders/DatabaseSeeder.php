@@ -10,18 +10,31 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // buat akun super admin default untuk login pertama kali
-        User::firstOrCreate(
-            ['email' => 'admin@iuranku.com'],
-            [
-                'name'     => 'Admin RT',
-                'password' => Hash::make('iuranku123'),
-                'role'     => 'super_admin',
-            ]
-        );
+        // 1. buat akun super_admin
+        User::create([
+            'name'     => 'Admin RT',
+            'email'    => 'admin@iuranku.com',
+            'password' => Hash::make('iuranku123'),
+            'role'     => 'super_admin',
+        ]);
 
+        // 2. buat akun admin biasa
+        User::create([
+            'name'     => 'Petugas RT',
+            'email'    => 'petugas@iuranku.com',
+            'password' => Hash::make('iuranku123'),
+            'role'     => 'admin',
+        ]);
+
+        // 3. data master & operasional (urutan penting — tidak boleh ditukar)
         $this->call([
-            FeeTypeSeeder::class,
+            FeeTypeSeeder::class,       // jenis iuran (diperlukan BillSeeder)
+            HouseSeeder::class,         // 20 rumah
+            ResidentSeeder::class,      // 17 penghuni
+            HouseResidentSeeder::class, // assign penghuni ke rumah + buat user resident
+            BillSeeder::class,          // tagihan 6 bulan (Jan–Jun 2026)
+            PaymentSeeder::class,       // simulasi pembayaran
+            ExpenseSeeder::class,       // pengeluaran RT 6 bulan
         ]);
     }
 }

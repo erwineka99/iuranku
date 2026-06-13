@@ -35,6 +35,10 @@ class BillController extends Controller
             $query->where('fee_type_id', $request->fee_type_id);
         }
 
+        if ($request->filled('resident_id')) {
+            $query->where('resident_id', $request->resident_id);
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }

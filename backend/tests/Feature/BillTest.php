@@ -214,7 +214,7 @@ test('detail tagihan yang tidak ada mengembalikan 404', function () {
 // ── DELETE /api/bills/{id} ─────────────────────────────────────────────────────
 
 test('dapat menghapus tagihan yang belum lunas', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     [$house, $resident] = occupiedHouse();
     $feeType = FeeType::factory()->create();
 
@@ -233,8 +233,25 @@ test('dapat menghapus tagihan yang belum lunas', function () {
     $this->assertDatabaseMissing('bills', ['id' => $bill->id]);
 });
 
+test('admin biasa tidak bisa hapus tagihan (403)', function () {
+    $token = makeAdminOnlyToken();
+    [$house, $resident] = occupiedHouse();
+    $feeType = FeeType::factory()->create();
+
+    $bill = Bill::factory()->create([
+        'house_id'    => $house->id,
+        'resident_id' => $resident->id,
+        'fee_type_id' => $feeType->id,
+        'status'      => 'unpaid',
+    ]);
+
+    $this->withToken($token)
+        ->deleteJson("/api/bills/{$bill->id}")
+        ->assertStatus(403);
+});
+
 test('gagal hapus tagihan yang sudah lunas', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     [$house, $resident] = occupiedHouse();
     $feeType = FeeType::factory()->create();
 

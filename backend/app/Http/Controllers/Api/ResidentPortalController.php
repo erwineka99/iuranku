@@ -116,9 +116,7 @@ class ResidentPortalController extends Controller
         return response()->json([
             'data' => $payments->map(fn ($p) => [
                 'id'           => $p->id,
-                'paid_at'      => $p->paid_at instanceof \Carbon\Carbon
-                    ? $p->paid_at->toDateString()
-                    : $p->paid_at,
+                'paid_at'      => $p->paid_at?->toDateString(),
                 'total_amount' => $p->total_amount,
                 'notes'        => $p->notes,
                 'items'        => $p->items->map(fn ($item) => [
@@ -157,9 +155,7 @@ class ResidentPortalController extends Controller
                 'category'     => $e->category,
                 'description'  => $e->description,
                 'amount'       => $e->amount,
-                'expense_date' => $e->expense_date instanceof \Carbon\Carbon
-                    ? $e->expense_date->toDateString()
-                    : $e->expense_date,
+                'expense_date' => $e->expense_date?->toDateString(),
             ]),
             'meta' => [
                 'total'        => $expenses->count(),

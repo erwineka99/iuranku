@@ -3,6 +3,7 @@
 use App\Models\House;
 use App\Models\HouseResident;
 use App\Models\Resident;
+use App\Models\User;
 
 // ── GET /api/houses/{house}/residents ─────────────────────────────────────────
 
@@ -61,6 +62,26 @@ test('dapat assign penghuni ke rumah', function () {
 
     // status rumah berubah jadi occupied
     expect($house->fresh()->status)->toBe('occupied');
+});
+
+test('assign penghuni ke rumah otomatis membuat akun user resident', function () {
+    $token = makeAdminToken();
+    $house = House::factory()->create();
+    $resident = Resident::factory()->create(['phone' => '081234567890']);
+
+    $this->withToken($token)
+        ->postJson("/api/houses/{$house->id}/residents", [
+            'resident_id' => $resident->id,
+            'moved_in_at' => '2024-01-01',
+        ])
+        ->assertStatus(201);
+
+    // akun user dengan email {phone}@iuranku.com harus terbuat
+    $this->assertDatabaseHas('users', [
+        'email'       => '081234567890@iuranku.com',
+        'role'        => 'resident',
+        'resident_id' => $resident->id,
+    ]);
 });
 
 test('status rumah berubah jadi occupied setelah penghuni di-assign', function () {

@@ -23,7 +23,7 @@ test('dapat mengambil daftar jenis iuran', function () {
 // ── POST /api/fee-types ───────────────────────────────────────────────────────
 
 test('dapat menambah jenis iuran baru', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
 
     $this->withToken($token)
         ->postJson('/api/fee-types', [
@@ -39,8 +39,16 @@ test('dapat menambah jenis iuran baru', function () {
     $this->assertDatabaseHas('fee_types', ['name' => 'Iuran Satpam', 'amount' => 100000]);
 });
 
+test('admin biasa tidak bisa tambah jenis iuran (403)', function () {
+    $token = makeAdminOnlyToken();
+
+    $this->withToken($token)
+        ->postJson('/api/fee-types', ['name' => 'Test', 'amount' => 100000])
+        ->assertStatus(403);
+});
+
 test('gagal tambah jenis iuran jika name kosong', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
 
     $this->withToken($token)
         ->postJson('/api/fee-types', ['amount' => 100000])
@@ -49,7 +57,7 @@ test('gagal tambah jenis iuran jika name kosong', function () {
 });
 
 test('gagal tambah jenis iuran jika amount tidak valid', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
 
     $this->withToken($token)
         ->postJson('/api/fee-types', ['name' => 'Test', 'amount' => 0])
@@ -58,7 +66,7 @@ test('gagal tambah jenis iuran jika amount tidak valid', function () {
 });
 
 test('gagal tambah jenis iuran jika name duplikat', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     FeeType::factory()->create(['name' => 'Iuran Duplikat']);
 
     $this->withToken($token)
@@ -70,7 +78,7 @@ test('gagal tambah jenis iuran jika name duplikat', function () {
 // ── PUT /api/fee-types/{id} ───────────────────────────────────────────────────
 
 test('dapat mengubah jenis iuran', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     $feeType = FeeType::factory()->create(['name' => 'Iuran Lama', 'amount' => 50000]);
 
     $this->withToken($token)
@@ -86,8 +94,17 @@ test('dapat mengubah jenis iuran', function () {
     $this->assertDatabaseHas('fee_types', ['id' => $feeType->id, 'name' => 'Iuran Baru']);
 });
 
+test('admin biasa tidak bisa ubah jenis iuran (403)', function () {
+    $token = makeAdminOnlyToken();
+    $feeType = FeeType::factory()->create();
+
+    $this->withToken($token)
+        ->putJson("/api/fee-types/{$feeType->id}", ['name' => 'Ubah', 'amount' => 100000])
+        ->assertStatus(403);
+});
+
 test('edit jenis iuran boleh pakai nama miliknya sendiri', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     $feeType = FeeType::factory()->create(['name' => 'Iuran Satpam']);
 
     $this->withToken($token)
@@ -99,7 +116,7 @@ test('edit jenis iuran boleh pakai nama miliknya sendiri', function () {
 });
 
 test('edit jenis iuran gagal jika name milik jenis lain', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     FeeType::factory()->create(['name' => 'Iuran Kebersihan']);
     $feeType = FeeType::factory()->create(['name' => 'Iuran Satpam']);
 
@@ -115,7 +132,7 @@ test('edit jenis iuran gagal jika name milik jenis lain', function () {
 // ── DELETE /api/fee-types/{id} ────────────────────────────────────────────────
 
 test('dapat menghapus jenis iuran yang belum dipakai', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     $feeType = FeeType::factory()->create();
 
     $this->withToken($token)
@@ -126,8 +143,17 @@ test('dapat menghapus jenis iuran yang belum dipakai', function () {
     $this->assertDatabaseMissing('fee_types', ['id' => $feeType->id]);
 });
 
+test('admin biasa tidak bisa hapus jenis iuran (403)', function () {
+    $token = makeAdminOnlyToken();
+    $feeType = FeeType::factory()->create();
+
+    $this->withToken($token)
+        ->deleteJson("/api/fee-types/{$feeType->id}")
+        ->assertStatus(403);
+});
+
 test('hapus jenis iuran yang tidak ada mengembalikan 404', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
 
     $this->withToken($token)
         ->deleteJson('/api/fee-types/9999')

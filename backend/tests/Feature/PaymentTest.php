@@ -189,7 +189,7 @@ test('detail pembayaran yang tidak ada mengembalikan 404', function () {
 // ── DELETE /api/payments/{id} ──────────────────────────────────────────────────
 
 test('dapat membatalkan pembayaran dan tagihan kembali ke unpaid', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
     [$resident, $bills] = setupBills(2);
 
     // catat pembayaran
@@ -212,4 +212,16 @@ test('dapat membatalkan pembayaran dan tagihan kembali ke unpaid', function () {
     foreach ($bills as $bill) {
         $this->assertDatabaseHas('bills', ['id' => $bill->id, 'status' => 'unpaid']);
     }
+});
+
+test('admin biasa tidak bisa hapus pembayaran (403)', function () {
+    $token = makeAdminOnlyToken();
+    [$resident, $bills] = setupBills(1);
+
+    $payment = Payment::factory()->create(['resident_id' => $resident->id, 'total_amount' => 100000]);
+    PaymentItem::create(['payment_id' => $payment->id, 'bill_id' => $bills[0]->id, 'amount' => 100000]);
+
+    $this->withToken($token)
+        ->deleteJson("/api/payments/{$payment->id}")
+        ->assertStatus(403);
 });

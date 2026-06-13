@@ -14,7 +14,7 @@ class FeeTypeRequest extends FormRequest
 
     public function rules(): array
     {
-        $feeTypeId = $this->route('fee_type')?->id;
+        $feeTypeId = $this->route('feeType')?->id;
 
         return [
             'name'        => [

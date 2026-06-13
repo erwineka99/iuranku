@@ -158,7 +158,7 @@ test('dapat mengubah pengeluaran', function () {
 // ── DELETE /api/expenses/{id} ──────────────────────────────────────────────────
 
 test('dapat menghapus pengeluaran', function () {
-    $token   = makeAdminToken();
+    $token   = makeSuperAdminToken();
     $expense = Expense::factory()->create();
 
     $this->withToken($token)
@@ -169,8 +169,17 @@ test('dapat menghapus pengeluaran', function () {
     $this->assertDatabaseMissing('expenses', ['id' => $expense->id]);
 });
 
+test('admin biasa tidak bisa hapus pengeluaran (403)', function () {
+    $token   = makeAdminOnlyToken();
+    $expense = Expense::factory()->create();
+
+    $this->withToken($token)
+        ->deleteJson("/api/expenses/{$expense->id}")
+        ->assertStatus(403);
+});
+
 test('hapus pengeluaran yang tidak ada mengembalikan 404', function () {
-    $token = makeAdminToken();
+    $token = makeSuperAdminToken();
 
     $this->withToken($token)
         ->deleteJson('/api/expenses/9999')
