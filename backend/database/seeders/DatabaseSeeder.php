@@ -28,13 +28,13 @@ class DatabaseSeeder extends Seeder
 
         // 3. data master & operasional (urutan penting — tidak boleh ditukar)
         $this->call([
-            FeeTypeSeeder::class,       // jenis iuran (diperlukan BillSeeder)
-            HouseSeeder::class,         // 20 rumah
-            ResidentSeeder::class,      // 17 penghuni
-            HouseResidentSeeder::class, // assign penghuni ke rumah + buat user resident
-            BillSeeder::class,          // tagihan 6 bulan (Jan–Jun 2026)
-            PaymentSeeder::class,       // simulasi pembayaran
-            ExpenseSeeder::class,       // pengeluaran RT 6 bulan
+            FeeTypeSeeder::class,       // 2 jenis iuran
+            HouseSeeder::class,         // 5 rumah (blok A)
+            ResidentSeeder::class,      // 5 penghuni
+            HouseResidentSeeder::class, // 4 rumah dihuni, 1 kosong + buat user resident
+            BillSeeder::class,          // tagihan Jan–Feb 2026
+            PaymentSeeder::class,       // Jan sudah lunas, Feb masih unpaid
+            ExpenseSeeder::class,       // 5 pengeluaran
         ]);
     }
 }

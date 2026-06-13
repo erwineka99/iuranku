@@ -50,20 +50,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="flex gap-6 text-sm text-green-300">
-          <div>
-            <p className="text-2xl font-bold text-white">20</p>
-            <p>Rumah terdaftar</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-white">3</p>
-            <p>Level akses</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-white">100%</p>
-            <p>Tercatat rapi</p>
-          </div>
-        </div>
       </div>
 
       {/* Panel kanan — form login */}
