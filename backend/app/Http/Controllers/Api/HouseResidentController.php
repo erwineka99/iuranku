@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\HouseResidentRequest;
 use App\Models\House;
 use App\Models\HouseResident;
+use App\Models\Resident;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class HouseResidentController extends Controller
 {
@@ -59,6 +62,20 @@ class HouseResidentController extends Controller
 
         $house->update(['status' => 'occupied']);
 
+        // buat akun user untuk penghuni jika belum ada
+        $resident = Resident::find($residentId);
+        $email    = $resident->phone . '@iuranku.com';
+
+        User::firstOrCreate(
+            ['email' => $email],
+            [
+                'name'        => $resident->full_name,
+                'password'    => Hash::make($resident->phone),
+                'role'        => 'resident',
+                'resident_id' => $resident->id,
+            ]
+        );
+
         return response()->json([
             'message' => 'Penghuni berhasil ditambahkan ke rumah',
             'data'    => [
@@ -100,6 +117,13 @@ class HouseResidentController extends Controller
 
         if (!$stillOccupied) {
             $house->update(['status' => 'unoccupied']);
+        }
+
+        // cabut semua token penghuni agar tidak bisa login lagi setelah checkout
+        $resident = $houseResident->resident;
+        $userAccount = User::where('resident_id', $resident->id)->first();
+        if ($userAccount) {
+            $userAccount->tokens()->delete();
         }
 
         return response()->json([

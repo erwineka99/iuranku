@@ -36,9 +36,11 @@ class AuthController extends Controller
             'message' => 'Login berhasil',
             'token'   => $token,
             'user'    => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
+                'id'          => $user->id,
+                'name'        => $user->name,
+                'email'       => $user->email,
+                'role'        => $user->role,
+                'resident_id' => $user->resident_id,
             ],
         ]);
     }
@@ -53,12 +55,16 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         return response()->json([
             'data' => [
-                'id'         => $request->user()->id,
-                'name'       => $request->user()->name,
-                'email'      => $request->user()->email,
-                'created_at' => $request->user()->created_at,
+                'id'          => $user->id,
+                'name'        => $user->name,
+                'email'       => $user->email,
+                'role'        => $user->role,
+                'resident_id' => $user->resident_id,
+                'created_at'  => $user->created_at,
             ],
         ]);
     }

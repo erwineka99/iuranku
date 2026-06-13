@@ -10,12 +10,13 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // buat akun admin default untuk login pertama kali
+        // buat akun super admin default untuk login pertama kali
         User::firstOrCreate(
             ['email' => 'admin@iuranku.com'],
             [
                 'name'     => 'Admin RT',
                 'password' => Hash::make('iuranku123'),
+                'role'     => 'super_admin',
             ]
         );
 
