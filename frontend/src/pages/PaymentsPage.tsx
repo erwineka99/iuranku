@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import AsyncSelect from 'react-select/async'
 import api from '@/api/axios'
 import type { Payment, Bill, Resident } from '@/types'
 import { useAuth } from '@/context/AuthContext'
+
+type ResidentOption = { value: number; label: string }
 
 function formatRupiah(n: number) {
   return 'Rp ' + n.toLocaleString('id-ID')
@@ -21,8 +24,7 @@ export default function PaymentsPage() {
   const [expanded, setExpanded] = useState<number | null>(null)
 
   const [showModal, setShowModal] = useState(false)
-  const [residents, setResidents] = useState<Resident[]>([])
-  const [selectedResident, setSelectedResident] = useState('')
+  const [selectedResident, setSelectedResident] = useState<ResidentOption | null>(null)
   const [unpaidBills, setUnpaidBills] = useState<Bill[]>([])
   const [selectedBills, setSelectedBills] = useState<number[]>([])
   const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10))
@@ -30,6 +32,16 @@ export default function PaymentsPage() {
   const [saving, setSaving] = useState(false)
   const [modalError, setModalError] = useState('')
   const [loadingBills, setLoadingBills] = useState(false)
+
+  async function loadResidentOptions(inputValue: string): Promise<ResidentOption[]> {
+    const res = await api.get(`/residents?search=${encodeURIComponent(inputValue)}&per_page=10`)
+    return (res.data.data as Resident[])
+      .filter((r) => r.current_house)
+      .map((r) => ({
+        value: r.id,
+        label: `${r.full_name} — ${r.current_house!.block}${r.current_house!.number}`,
+      }))
+  }
 
   function buildQuery() {
     const p = new URLSearchParams()
@@ -47,19 +59,17 @@ export default function PaymentsPage() {
 
   useEffect(() => { fetchPayments() }, [filterYear, filterMonth])
 
-  async function openModal() {
-    const res = await api.get('/residents')
-    setResidents(res.data.data)
-    setSelectedResident(''); setUnpaidBills([]); setSelectedBills([])
+  function openModal() {
+    setSelectedResident(null); setUnpaidBills([]); setSelectedBills([])
     setPaidAt(new Date().toISOString().slice(0, 10)); setNotes(''); setModalError('')
     setShowModal(true)
   }
 
-  async function handleResidentChange(id: string) {
-    setSelectedResident(id); setSelectedBills([])
-    if (!id) { setUnpaidBills([]); return }
+  async function handleResidentChange(option: ResidentOption | null) {
+    setSelectedResident(option); setSelectedBills([])
+    if (!option) { setUnpaidBills([]); return }
     setLoadingBills(true)
-    const res = await api.get(`/bills?resident_id=${id}&status=unpaid`)
+    const res = await api.get(`/bills?resident_id=${option.value}&status=unpaid`)
     setUnpaidBills(res.data.data)
     setLoadingBills(false)
   }
@@ -75,7 +85,7 @@ export default function PaymentsPage() {
     if (selectedBills.length === 0) { setModalError('Pilih minimal satu tagihan'); return }
     setSaving(true); setModalError('')
     try {
-      await api.post('/payments', { resident_id: Number(selectedResident), paid_at: paidAt, bill_ids: selectedBills, notes })
+      await api.post('/payments', { resident_id: selectedResident!.value, paid_at: paidAt, bill_ids: selectedBills, notes })
       setShowModal(false); fetchPayments()
     } catch (e: any) {
       setModalError(e.response?.data?.message ?? 'Terjadi kesalahan')
@@ -208,15 +218,37 @@ export default function PaymentsPage() {
                 {modalError && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{modalError}</p>}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Penghuni</label>
-                  <select value={selectedResident} onChange={(e) => handleResidentChange(e.target.value)}
-                    className={`w-full ${inputCls}`} required>
-                    <option value="">Pilih penghuni...</option>
-                    {residents.filter((r) => r.current_house).map((r) => (
-                      <option key={r.id} value={r.id}>{r.full_name} ({r.current_house!.block}{r.current_house!.number})</option>
-                    ))}
-                  </select>
+                  <AsyncSelect<ResidentOption>
+                    value={selectedResident}
+                    onChange={handleResidentChange}
+                    loadOptions={loadResidentOptions}
+                    defaultOptions
+                    isClearable
+                    placeholder="Ketik nama penghuni..."
+                    loadingMessage={() => 'Mencari...'}
+                    noOptionsMessage={({ inputValue }) =>
+                      inputValue ? 'Penghuni tidak ditemukan' : 'Ketik untuk mencari'
+                    }
+                    styles={{
+                      control: (base, state) => ({
+                        ...base,
+                        borderRadius: '0.75rem',
+                        borderColor: state.isFocused ? '#15803d' : '#e5e7eb',
+                        boxShadow: state.isFocused ? '0 0 0 2px #bbf7d0' : 'none',
+                        fontSize: '0.875rem',
+                        '&:hover': { borderColor: '#15803d' },
+                      }),
+                      option: (base, state) => ({
+                        ...base,
+                        fontSize: '0.875rem',
+                        backgroundColor: state.isSelected ? '#15803d' : state.isFocused ? '#f0fdf4' : 'white',
+                        color: state.isSelected ? 'white' : '#374151',
+                      }),
+                      menu: (base) => ({ ...base, borderRadius: '0.75rem', overflow: 'hidden', zIndex: 60 }),
+                    }}
+                  />
                 </div>
-                {selectedResident && (
+                {selectedResident?.value && (
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-2">Pilih Tagihan</label>
                     {loadingBills ? (

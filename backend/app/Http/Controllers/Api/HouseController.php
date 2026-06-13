@@ -94,6 +94,7 @@ class HouseController extends Controller
             'description'      => $house->description,
             'status'           => $house->status,
             'current_resident' => $active ? [
+                'house_resident_id' => $active->id,
                 'id'            => $active->resident->id,
                 'full_name'     => $active->resident->full_name,
                 'phone'         => $active->resident->phone,

@@ -6,12 +6,28 @@ const roleLabel: Record<string, string> = {
   resident: 'Penghuni',
 }
 
-export default function Header() {
+interface Props {
+  onMenuClick: () => void
+}
+
+export default function Header({ onMenuClick }: Props) {
   const { user, logout, role } = useAuth()
 
   return (
-    <header className="h-13 bg-white border-b border-gray-100 flex items-center justify-between px-6 shrink-0">
-      <div />
+    <header className="h-13 bg-white border-b border-gray-100 flex items-center justify-between px-4 shrink-0">
+      {/* Tombol hamburger — hanya muncul di mobile */}
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+        aria-label="Buka menu"
+      >
+        <span className="block w-5 h-0.5 bg-current mb-1" />
+        <span className="block w-5 h-0.5 bg-current mb-1" />
+        <span className="block w-5 h-0.5 bg-current" />
+      </button>
+
+      <div className="hidden lg:block" />
+
       <div className="flex items-center gap-3">
         <div className="text-right">
           <p className="text-sm font-medium text-gray-800 leading-tight">{user?.name}</p>

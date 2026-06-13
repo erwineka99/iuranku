@@ -22,6 +22,7 @@ export interface House {
 }
 
 export interface CurrentResident {
+  house_resident_id: number
   id: number
   full_name: string
   phone: string
