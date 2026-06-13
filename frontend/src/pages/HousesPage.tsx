@@ -208,7 +208,8 @@ export default function HousesPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 sm:items-center">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
 
             {/* Modal: Tambah/Edit Rumah */}
@@ -348,6 +349,7 @@ export default function HousesPage() {
               </>
             )}
 
+          </div>
           </div>
         </div>
       )}

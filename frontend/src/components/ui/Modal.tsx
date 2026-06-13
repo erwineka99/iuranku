@@ -9,16 +9,18 @@ interface ModalProps {
 
 export function Modal({ title, subtitle, onClose, children }: ModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold text-gray-900">{title}</h3>
-            {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 overflow-y-auto">
+      <div className="flex min-h-full items-end justify-center p-4 sm:items-center">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900">{title}</h3>
+              {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+            </div>
+            <button onClick={onClose} className="text-gray-300 hover:text-gray-500 text-lg leading-none mt-0.5">×</button>
           </div>
-          <button onClick={onClose} className="text-gray-300 hover:text-gray-500 text-lg leading-none mt-0.5">×</button>
+          {children}
         </div>
-        {children}
       </div>
     </div>
   )

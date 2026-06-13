@@ -141,7 +141,8 @@ export default function UsersPage() {
 
       {/* Modal tambah admin */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 sm:items-center">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
               <div>
@@ -185,12 +186,14 @@ export default function UsersPage() {
               </div>
             </form>
           </div>
+          </div>
         </div>
       )}
 
       {/* Modal reset password */}
       {resetTarget && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 sm:items-center">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
               <div>
@@ -214,6 +217,7 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
+          </div>
           </div>
         </div>
       )}
