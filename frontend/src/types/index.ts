@@ -1,7 +1,11 @@
+export type UserRole = 'super_admin' | 'admin' | 'resident'
+
 export interface User {
   id: number
   name: string
   email: string
+  role: UserRole
+  resident_id: number | null
   created_at: string
 }
 
@@ -208,4 +212,70 @@ export interface ListResponse<T> {
 export interface SingleResponse<T> {
   data: T
   message?: string
+}
+
+// --- Resident Portal ---
+export interface ResidentDashboard {
+  resident: {
+    id: number
+    full_name: string
+    phone: string
+    resident_type: 'permanent' | 'contract'
+    is_married: boolean
+  }
+  house: {
+    id: number
+    number: string
+    block: string
+    address: string
+    moved_in_at: string
+  } | null
+  bill_summary: {
+    total: number
+    paid: number
+    unpaid: number
+    unpaid_amount: number
+  }
+}
+
+export interface ResidentBill {
+  id: number
+  fee_type: { id: number; name: string }
+  year: number
+  month: number
+  amount: number
+  status: 'paid' | 'unpaid'
+  paid_at: string | null
+}
+
+export interface ResidentPayment {
+  id: number
+  paid_at: string
+  total_amount: number
+  notes: string | null
+  items: {
+    bill_id: number
+    fee_type: string
+    year: number
+    month: number
+    amount: number
+  }[]
+}
+
+export interface ResidentExpense {
+  id: number
+  category: string
+  description: string
+  amount: number
+  expense_date: string
+}
+
+// --- User Management ---
+export interface AppUser {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+  resident: { id: number; full_name: string; phone: string } | null
+  created_at: string
 }

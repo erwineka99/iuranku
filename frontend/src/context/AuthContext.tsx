@@ -1,12 +1,16 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import api from '@/api/axios'
-import type { User } from '@/types'
+import type { User, UserRole } from '@/types'
 
 interface AuthContextValue {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  role: UserRole | null
+  isAdmin: boolean      // true untuk super_admin dan admin
+  isSuperAdmin: boolean
+  isResident: boolean
+  login: (email: string, password: string) => Promise<{ role: UserRole }>
   logout: () => Promise<void>
 }
 
@@ -29,11 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string): Promise<{ role: UserRole }> {
     const res = await api.post('/auth/login', { email, password })
     const { token, user } = res.data
     localStorage.setItem('auth_token', token)
     setUser(user)
+    return { role: user.role as UserRole }
   }
 
   async function logout() {
@@ -42,8 +47,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  const role = user?.role ?? null
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      role,
+      isAdmin: role === 'super_admin' || role === 'admin',
+      isSuperAdmin: role === 'super_admin',
+      isResident: role === 'resident',
+      login,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   )

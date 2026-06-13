@@ -8,8 +8,11 @@ use App\Models\Bill;
 use App\Models\FeeType;
 use App\Models\House;
 use App\Models\HouseResident;
+use App\Models\Prepayment;
+use App\Models\PrepaymentUsage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BillController extends Controller
 {
@@ -78,35 +81,62 @@ class BillController extends Controller
             ->whereHas('house', fn ($q) => $q->where('status', 'occupied'))
             ->get();
 
-        $generated = 0;
-        $skipped   = 0;
+        $generated       = 0;
+        $skipped         = 0;
+        $autoPaid        = 0; // tagihan yang langsung lunas karena prepayment
 
-        foreach ($activeResidents as $hr) {
-            foreach ($feeTypes as $feeType) {
-                $exists = Bill::where('house_id', $hr->house_id)
-                    ->where('fee_type_id', $feeType->id)
-                    ->where('year', $year)
-                    ->where('month', $month)
-                    ->exists();
+        DB::transaction(function () use ($activeResidents, $feeTypes, $year, $month, &$generated, &$skipped, &$autoPaid) {
+            foreach ($activeResidents as $hr) {
+                foreach ($feeTypes as $feeType) {
+                    $exists = Bill::where('house_id', $hr->house_id)
+                        ->where('fee_type_id', $feeType->id)
+                        ->where('year', $year)
+                        ->where('month', $month)
+                        ->exists();
 
-                if ($exists) {
-                    $skipped++;
-                    continue;
+                    if ($exists) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    // cek apakah ada prepayment dengan saldo cukup untuk tagihan ini
+                    $prepayment = Prepayment::where('resident_id', $hr->resident_id)
+                        ->where('fee_type_id', $feeType->id)
+                        ->where('remaining_balance', '>=', $feeType->amount)
+                        ->orderBy('paid_at') // pakai yang paling lama dulu (FIFO)
+                        ->lockForUpdate()
+                        ->first();
+
+                    $status = 'unpaid';
+
+                    $bill = Bill::create([
+                        'house_id'    => $hr->house_id,
+                        'resident_id' => $hr->resident_id,
+                        'fee_type_id' => $feeType->id,
+                        'year'        => $year,
+                        'month'       => $month,
+                        'amount'      => $feeType->amount,
+                        'status'      => $status,
+                    ]);
+
+                    if ($prepayment) {
+                        // potong saldo prepayment dan tandai bill langsung paid
+                        $prepayment->decrement('remaining_balance', $feeType->amount);
+
+                        PrepaymentUsage::create([
+                            'prepayment_id' => $prepayment->id,
+                            'bill_id'       => $bill->id,
+                            'amount_used'   => $feeType->amount,
+                        ]);
+
+                        $bill->update(['status' => 'paid']);
+                        $autoPaid++;
+                    }
+
+                    $generated++;
                 }
-
-                Bill::create([
-                    'house_id'    => $hr->house_id,
-                    'resident_id' => $hr->resident_id,
-                    'fee_type_id' => $feeType->id,
-                    'year'        => $year,
-                    'month'       => $month,
-                    'amount'      => $feeType->amount,
-                    'status'      => 'unpaid',
-                ]);
-
-                $generated++;
             }
-        }
+        });
 
         return response()->json([
             'message' => 'Tagihan berhasil di-generate',
@@ -115,6 +145,7 @@ class BillController extends Controller
                 'month'     => $month,
                 'generated' => $generated,
                 'skipped'   => $skipped,
+                'auto_paid' => $autoPaid,
             ],
         ], 201);
     }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\FeeTypeController;
 use App\Http\Controllers\Api\HouseController;
 use App\Http\Controllers\Api\HouseResidentController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PrepaymentController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ResidentController;
 use App\Http\Controllers\Api\ResidentPortalController;
@@ -78,6 +79,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('expenses/{expense}', [ExpenseController::class, 'update']);
         Route::middleware('role:super_admin')->group(function () {
             Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy']);
+        });
+
+        // modul pembayaran dimuka (prepayment)
+        Route::get('prepayments',              [PrepaymentController::class, 'index']);
+        Route::get('prepayments/summary',      [PrepaymentController::class, 'summary']);
+        Route::post('prepayments',             [PrepaymentController::class, 'store']);
+        Route::get('prepayments/{prepayment}', [PrepaymentController::class, 'show']);
+        Route::middleware('role:super_admin')->group(function () {
+            Route::delete('prepayments/{prepayment}', [PrepaymentController::class, 'destroy']);
         });
 
         // modul laporan
