@@ -97,7 +97,7 @@ export default function ReportsPage() {
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <YAxis tickFormatter={formatRupiah} tick={{ fontSize: 10, fill: '#9ca3af' }} width={60} />
               <Tooltip
-                formatter={(value: number, name: string) => [formatRupiahFull(value), name]}
+                formatter={(value) => [formatRupiahFull(Number(value ?? 0)), '']}
                 labelFormatter={(label) => `Bulan: ${label}`}
                 contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: 12 }}
               />
