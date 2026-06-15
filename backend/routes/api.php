@@ -27,10 +27,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- portal penghuni (hanya role resident) ---
     Route::middleware('role:resident')->prefix('resident')->group(function () {
-        Route::get('/dashboard', [ResidentPortalController::class, 'dashboard']);
-        Route::get('/bills',     [ResidentPortalController::class, 'bills']);
-        Route::get('/payments',  [ResidentPortalController::class, 'payments']);
-        Route::get('/expenses',  [ResidentPortalController::class, 'expenses']);
+        Route::get('/dashboard',    [ResidentPortalController::class, 'dashboard']);
+        Route::get('/bills',        [ResidentPortalController::class, 'bills']);
+        Route::get('/payments',     [ResidentPortalController::class, 'payments']);
+        Route::get('/prepayments',  [ResidentPortalController::class, 'prepayments']);
+        Route::get('/expenses',     [ResidentPortalController::class, 'expenses']);
     });
 
     // --- endpoint admin & super_admin ---
@@ -56,10 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         // modul tagihan — generate & tambah manual boleh admin, hapus hanya super_admin
-        Route::post('bills/generate', [BillController::class, 'generate']);
-        Route::get('bills',           [BillController::class, 'index']);
-        Route::post('bills',          [BillController::class, 'store']);
-        Route::get('bills/{bill}',    [BillController::class, 'show']);
+        Route::post('bills/generate',                    [BillController::class, 'generate']);
+        Route::get('bills',                              [BillController::class, 'index']);
+        Route::post('bills',                             [BillController::class, 'store']);
+        Route::get('bills/{bill}',                       [BillController::class, 'show']);
+        Route::post('bills/{bill}/apply-prepayment',     [BillController::class, 'applyPrepayment']);
         Route::middleware('role:super_admin')->group(function () {
             Route::delete('bills/{bill}', [BillController::class, 'destroy']);
         });

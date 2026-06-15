@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PaymentRequest;
 use App\Models\Bill;
 use App\Models\Payment;
+use App\Models\PrepaymentUsage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,37 +15,102 @@ class PaymentController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Payment::with(['resident', 'items.bill.feeType', 'items.bill.house'])
+        // --- Pembayaran tunai ---
+        $cashQuery = Payment::with(['resident', 'items.bill.feeType', 'items.bill.house'])
             ->latest('paid_at');
 
-        if ($request->filled('resident_id')) {
-            $query->where('resident_id', $request->resident_id);
-        }
-
-        if ($request->filled('house_id')) {
-            $query->whereHas('items.bill', fn ($q) => $q->where('house_id', $request->house_id));
-        }
-
-        if ($request->filled('year')) {
-            $query->whereYear('paid_at', $request->year);
-        }
-
-        if ($request->filled('month')) {
-            $query->whereMonth('paid_at', $request->month);
-        }
+        if ($request->filled('resident_id')) $cashQuery->where('resident_id', $request->resident_id);
+        if ($request->filled('year'))        $cashQuery->whereYear('paid_at', $request->year);
+        if ($request->filled('month'))       $cashQuery->whereMonth('paid_at', $request->month);
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->whereHas('resident', fn ($q) => $q->where('full_name', 'like', "%{$search}%"));
+            $cashQuery->where(function ($q) use ($search) {
+                $q->whereHas('resident', fn ($r) => $r->where('full_name', 'like', "%{$search}%"))
+                  ->orWhereHas('items.bill.house', fn ($h) =>
+                      $h->where('block', 'like', "%{$search}%")
+                        ->orWhere('number', 'like', "%{$search}%")
+                  );
+            });
         }
 
-        $payments = $query->get();
+        $payments = $cashQuery->get();
+
+        $cashItems = $payments->map(fn ($p) => [
+            'id'           => 'pay-' . $p->id,
+            'type'         => 'cash',
+            'resident'     => ['id' => $p->resident->id, 'full_name' => $p->resident->full_name],
+            'paid_at'      => $p->paid_at?->toDateString(),
+            'total_amount' => $p->total_amount,
+            'notes'        => $p->notes,
+            'items'        => $p->items->map(fn ($item) => [
+                'bill_id'  => $item->bill_id,
+                'fee_type' => $item->bill->feeType->name ?? null,
+                'year'     => $item->bill->year,
+                'month'    => $item->bill->month,
+                'amount'   => $item->amount,
+                'house'    => $item->bill->house
+                    ? ['block' => $item->bill->house->block, 'number' => $item->bill->house->number]
+                    : null,
+            ]),
+        ]);
+
+        // --- Pemakaian saldo dimuka ---
+        $usageQuery = PrepaymentUsage::with([
+            'prepayment.resident', 'prepayment.feeType', 'bill.house',
+        ]);
+
+        if ($request->filled('resident_id')) {
+            $usageQuery->whereHas('prepayment', fn ($q) => $q->where('resident_id', $request->resident_id));
+        }
+        if ($request->filled('year'))  $usageQuery->whereHas('bill', fn ($q) => $q->where('year', $request->year));
+        if ($request->filled('month')) $usageQuery->whereHas('bill', fn ($q) => $q->where('month', $request->month));
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $usageQuery->where(function ($q) use ($search) {
+                $q->whereHas('prepayment.resident', fn ($r) => $r->where('full_name', 'like', "%{$search}%"))
+                  ->orWhereHas('bill.house', fn ($h) =>
+                      $h->where('block', 'like', "%{$search}%")
+                        ->orWhere('number', 'like', "%{$search}%")
+                  );
+            });
+        }
+
+        $usages = $usageQuery->get();
+
+        $prepaymentItems = $usages->map(fn ($u) => [
+            'id'           => 'pre-' . $u->id,
+            'type'         => 'prepayment',
+            'resident'     => [
+                'id'        => $u->prepayment->resident->id,
+                'full_name' => $u->prepayment->resident->full_name,
+            ],
+            'paid_at'      => $u->bill->year . '-' . str_pad($u->bill->month, 2, '0', STR_PAD_LEFT) . '-01',
+            'total_amount' => $u->amount_used,
+            'notes'        => 'Saldo bayar dimuka',
+            'items'        => [[
+                'bill_id'  => $u->bill_id,
+                'fee_type' => $u->prepayment->feeType->name,
+                'year'     => $u->bill->year,
+                'month'    => $u->bill->month,
+                'amount'   => $u->amount_used,
+                'house'    => $u->bill->house
+                    ? ['block' => $u->bill->house->block, 'number' => $u->bill->house->number]
+                    : null,
+            ]],
+        ]);
+
+        $all = $cashItems->concat($prepaymentItems)
+            ->sortByDesc('paid_at')
+            ->values();
 
         return response()->json([
-            'data' => $payments->map(fn ($p) => $this->formatPayment($p)),
+            'data' => $all,
             'meta' => [
-                'total'        => $payments->count(),
-                'total_amount' => $payments->sum('total_amount'),
+                'total'             => $all->count(),
+                'total_amount'      => $payments->sum('total_amount'),
+                'total_prepayment'  => $usages->sum('amount_used'),
             ],
         ]);
     }

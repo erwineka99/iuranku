@@ -46,6 +46,17 @@ class BillController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('resident', fn ($r) => $r->where('full_name', 'like', "%{$search}%"))
+                  ->orWhereHas('house', fn ($h) =>
+                      $h->where('block', 'like', "%{$search}%")
+                        ->orWhere('number', 'like', "%{$search}%")
+                  );
+            });
+        }
+
         $bills = $query->get();
 
         $totalAmount = $bills->sum('amount');
@@ -221,6 +232,48 @@ class BillController extends Controller
                 'paid_at'    => null,
                 'payment_id' => null,
                 'created_at' => $bill->created_at,
+            ],
+        ]);
+    }
+
+    // POST /api/bills/{bill}/apply-prepayment — lunasi tagihan unpaid menggunakan saldo dimuka
+    public function applyPrepayment(Bill $bill): JsonResponse
+    {
+        if ($bill->status === 'paid') {
+            return response()->json(['message' => 'Tagihan ini sudah lunas'], 422);
+        }
+
+        $prepayment = Prepayment::where('resident_id', $bill->resident_id)
+            ->where('fee_type_id', $bill->fee_type_id)
+            ->where('remaining_balance', '>=', $bill->amount)
+            ->orderBy('paid_at')
+            ->first();
+
+        if (!$prepayment) {
+            return response()->json([
+                'message' => 'Tidak ada saldo bayar dimuka yang cukup untuk tagihan ini',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($bill, $prepayment) {
+            $prepayment->decrement('remaining_balance', $bill->amount);
+
+            PrepaymentUsage::create([
+                'prepayment_id' => $prepayment->id,
+                'bill_id'       => $bill->id,
+                'amount_used'   => $bill->amount,
+            ]);
+
+            $bill->update(['status' => 'paid']);
+        });
+
+        return response()->json([
+            'message' => 'Tagihan berhasil dilunasi menggunakan saldo bayar dimuka',
+            'data'    => [
+                'bill_id'           => $bill->id,
+                'prepayment_id'     => $prepayment->id,
+                'amount_used'       => $bill->amount,
+                'remaining_balance' => $prepayment->fresh()->remaining_balance,
             ],
         ]);
     }

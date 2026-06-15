@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Bill;
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Models\Prepayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -99,37 +100,100 @@ class ResidentPortalController extends Controller
     {
         $resident = $request->user()->resident;
 
-        $query = Payment::with('items.bill.feeType')
+        // 1. Pembayaran tunai
+        $paymentQuery = Payment::with('items.bill.feeType')
             ->where('resident_id', $resident->id)
             ->orderBy('paid_at', 'desc');
 
-        if ($request->filled('year')) {
-            $query->whereYear('paid_at', $request->year);
-        }
+        if ($request->filled('year'))  $paymentQuery->whereYear('paid_at', $request->year);
+        if ($request->filled('month')) $paymentQuery->whereMonth('paid_at', $request->month);
 
-        if ($request->filled('month')) {
-            $query->whereMonth('paid_at', $request->month);
-        }
+        $payments = $paymentQuery->get();
 
-        $payments = $query->get();
+        $cashItems = $payments->map(fn ($p) => [
+            'id'           => 'pay-' . $p->id,
+            'type'         => 'cash',
+            'paid_at'      => $p->paid_at?->toDateString(),
+            'total_amount' => $p->total_amount,
+            'notes'        => $p->notes,
+            'items'        => $p->items->map(fn ($item) => [
+                'bill_id'  => $item->bill_id,
+                'fee_type' => $item->bill->feeType->name,
+                'year'     => $item->bill->year,
+                'month'    => $item->bill->month,
+                'amount'   => $item->amount,
+            ]),
+        ]);
+
+        // 2. Pemakaian saldo dimuka
+        $usageQuery = PrepaymentUsage::with(['prepayment.feeType', 'bill'])
+            ->whereHas('prepayment', fn ($q) => $q->where('resident_id', $resident->id));
+
+        if ($request->filled('year'))  $usageQuery->whereHas('bill', fn ($q) => $q->where('year', $request->year));
+        if ($request->filled('month')) $usageQuery->whereHas('bill', fn ($q) => $q->where('month', $request->month));
+
+        $usages = $usageQuery->get();
+
+        // kelompokkan per prepayment+tanggal agar terlihat sebagai 1 entri per pemakaian
+        $prepaymentItems = $usages->map(fn ($u) => [
+            'id'           => 'pre-' . $u->id,
+            'type'         => 'prepayment',
+            'paid_at'      => $u->bill->year . '-' . str_pad($u->bill->month, 2, '0', STR_PAD_LEFT) . '-01',
+            'total_amount' => $u->amount_used,
+            'notes'        => 'Dipotong dari saldo bayar dimuka',
+            'items'        => [[
+                'bill_id'  => $u->bill_id,
+                'fee_type' => $u->prepayment->feeType->name,
+                'year'     => $u->bill->year,
+                'month'    => $u->bill->month,
+                'amount'   => $u->amount_used,
+            ]],
+        ]);
+
+        // gabung dan urutkan by paid_at desc
+        $all = $cashItems->concat($prepaymentItems)
+            ->sortByDesc('paid_at')
+            ->values();
 
         return response()->json([
-            'data' => $payments->map(fn ($p) => [
-                'id'           => $p->id,
-                'paid_at'      => $p->paid_at?->toDateString(),
-                'total_amount' => $p->total_amount,
-                'notes'        => $p->notes,
-                'items'        => $p->items->map(fn ($item) => [
-                    'bill_id'  => $item->bill_id,
-                    'fee_type' => $item->bill->feeType->name,
-                    'year'     => $item->bill->year,
-                    'month'    => $item->bill->month,
-                    'amount'   => $item->amount,
+            'data' => $all,
+            'meta' => [
+                'total'              => $all->count(),
+                'total_amount'       => $payments->sum('total_amount'),
+                'total_prepayment'   => $usages->sum('amount_used'),
+            ],
+        ]);
+    }
+
+    // GET /api/resident/prepayments — saldo bayar dimuka milik penghuni yang login
+    public function prepayments(Request $request): JsonResponse
+    {
+        $resident = $request->user()->resident;
+
+        $prepayments = Prepayment::with(['feeType', 'usages.bill'])
+            ->where('resident_id', $resident->id)
+            ->orderBy('paid_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'data' => $prepayments->map(fn ($p) => [
+                'id'                => $p->id,
+                'fee_type'          => ['id' => $p->feeType->id, 'name' => $p->feeType->name],
+                'amount'            => $p->amount,
+                'remaining_balance' => $p->remaining_balance,
+                'used_amount'       => $p->amount - $p->remaining_balance,
+                'paid_at'           => $p->paid_at?->toDateString(),
+                'notes'             => $p->notes,
+                'usages'            => $p->usages->map(fn ($u) => [
+                    'year'        => $u->bill->year,
+                    'month'       => $u->bill->month,
+                    'amount_used' => $u->amount_used,
                 ]),
             ]),
             'meta' => [
-                'total'        => $payments->count(),
-                'total_amount' => $payments->sum('total_amount'),
+                'total'           => $prepayments->count(),
+                'total_amount'    => $prepayments->sum('amount'),
+                'total_remaining' => $prepayments->sum('remaining_balance'),
             ],
         ]);
     }

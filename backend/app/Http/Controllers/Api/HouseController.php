@@ -22,7 +22,10 @@ class HouseController extends Controller
             $query->where(function ($q) use ($request) {
                 $q->where('number', 'like', "%{$request->search}%")
                   ->orWhere('block', 'like', "%{$request->search}%")
-                  ->orWhere('address', 'like', "%{$request->search}%");
+                  ->orWhere('address', 'like', "%{$request->search}%")
+                  ->orWhereHas('activeResident.resident', function ($r) use ($request) {
+                      $r->where('full_name', 'like', "%{$request->search}%");
+                  });
             });
         }
 
