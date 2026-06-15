@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import AsyncSelect from 'react-select/async'
 import api from '@/api/axios'
 import type { Bill, FeeType, House } from '@/types'
 import { useAuth } from '@/context/AuthContext'
+
+type HouseOption = { value: number; label: string }
 
 function formatRupiah(n: number) {
   return 'Rp ' + n.toLocaleString('id-ID')
@@ -21,6 +24,7 @@ export default function BillsPage() {
   const [filterYear, setFilterYear] = useState(CURRENT_YEAR)
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1)
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterSearch, setFilterSearch] = useState('')
 
   const [showGenerate, setShowGenerate] = useState(false)
   const [genYear, setGenYear] = useState(CURRENT_YEAR)
@@ -29,17 +33,28 @@ export default function BillsPage() {
   const [genResult, setGenResult] = useState('')
 
   const [showManual, setShowManual] = useState(false)
-  const [houses, setHouses] = useState<House[]>([])
   const [feeTypes, setFeeTypes] = useState<FeeType[]>([])
-  const [manualForm, setManualForm] = useState({ house_id: '', fee_type_id: '', year: CURRENT_YEAR, month: new Date().getMonth() + 1, amount: '' })
+  const [selectedHouse, setSelectedHouse] = useState<HouseOption | null>(null)
+  const [manualForm, setManualForm] = useState({ fee_type_id: '', year: CURRENT_YEAR, month: new Date().getMonth() + 1 })
+  const [prepaymentBalances, setPrepaymentBalances] = useState<Record<number, number>>({}) // fee_type_id → remaining_balance
+  const [usePrepayment, setUsePrepayment] = useState(false)
   const [manualError, setManualError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  async function loadHouseOptions(inputValue: string): Promise<HouseOption[]> {
+    const res = await api.get(`/houses?status=occupied&search=${encodeURIComponent(inputValue)}&per_page=20`)
+    return (res.data.data as House[]).map((h) => ({
+      value: h.id,
+      label: `${h.block}${h.number}${h.current_resident ? ` — ${h.current_resident.full_name}` : ''}`,
+    }))
+  }
 
   function buildQuery() {
     const p = new URLSearchParams()
     if (filterYear) p.set('year', String(filterYear))
     if (filterMonth) p.set('month', String(filterMonth))
     if (filterStatus) p.set('status', filterStatus)
+    if (filterSearch.trim()) p.set('search', filterSearch.trim())
     return p.toString()
   }
 
@@ -50,7 +65,10 @@ export default function BillsPage() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchBills() }, [filterYear, filterMonth, filterStatus])
+  useEffect(() => {
+    const t = setTimeout(() => fetchBills(), filterSearch ? 400 : 0)
+    return () => clearTimeout(t)
+  }, [filterYear, filterMonth, filterStatus, filterSearch])
 
   async function handleGenerate() {
     setGenerating(true); setGenResult('')
@@ -65,22 +83,48 @@ export default function BillsPage() {
   }
 
   async function openManual() {
-    const [housesRes, feeRes] = await Promise.all([api.get('/houses?status=occupied'), api.get('/fee-types')])
-    setHouses(housesRes.data.data)
+    const feeRes = await api.get('/fee-types')
     setFeeTypes(feeRes.data.data)
-    setManualForm({ house_id: '', fee_type_id: '', year: CURRENT_YEAR, month: new Date().getMonth() + 1, amount: '' })
+    setSelectedHouse(null)
+    setPrepaymentBalances({})
+    setUsePrepayment(false)
+    setManualForm({ fee_type_id: '', year: CURRENT_YEAR, month: new Date().getMonth() + 1 })
     setManualError(''); setShowManual(true)
   }
 
+  async function handleHouseChange(opt: HouseOption | null) {
+    setSelectedHouse(opt)
+    setUsePrepayment(false)
+    setPrepaymentBalances({})
+    if (!opt) return
+    // ambil saldo prepayment milik penghuni di rumah ini
+    const house = (await api.get(`/houses/${opt.value}`)).data.data
+    const residentId = house.current_resident?.id
+    if (!residentId) return
+    const res = await api.get(`/prepayments?resident_id=${residentId}&has_balance=1`)
+    const balances: Record<number, number> = {}
+    for (const p of res.data.data) {
+      // akumulasi jika ada lebih dari 1 prepayment per jenis iuran
+      balances[p.fee_type.id] = (balances[p.fee_type.id] ?? 0) + p.remaining_balance
+    }
+    setPrepaymentBalances(balances)
+  }
+
   async function handleManualSubmit(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true); setManualError('')
+    e.preventDefault()
+    if (!selectedHouse) { setManualError('Pilih rumah terlebih dahulu'); return }
+    setSaving(true); setManualError('')
     try {
-      await api.post('/bills', {
-        house_id: Number(manualForm.house_id),
+      const ft = feeTypes.find((f) => f.id === Number(manualForm.fee_type_id))
+      const billRes = await api.post('/bills', {
+        house_id: selectedHouse.value,
         fee_type_id: Number(manualForm.fee_type_id),
         year: manualForm.year, month: manualForm.month,
-        amount: Number(manualForm.amount),
+        amount: ft!.amount,
       })
+      if (usePrepayment) {
+        await api.post(`/bills/${billRes.data.data.id}/apply-prepayment`)
+      }
       setShowManual(false); fetchBills()
     } catch (e: any) {
       const msgs = e.response?.data?.errors
@@ -92,6 +136,16 @@ export default function BillsPage() {
     if (!confirm(`Hapus tagihan ${bill.house.block}${bill.house.number} — ${BULAN[bill.month]} ${bill.year}?`)) return
     try { await api.delete(`/bills/${bill.id}`); fetchBills() }
     catch (e: any) { alert(e.response?.data?.message ?? 'Gagal menghapus') }
+  }
+
+  async function handleApplyPrepayment(bill: Bill) {
+    if (!confirm(`Lunasi tagihan ${bill.house.block}${bill.house.number} (${bill.fee_type.name} ${BULAN[bill.month]} ${bill.year}) menggunakan saldo bayar dimuka?`)) return
+    try {
+      await api.post(`/bills/${bill.id}/apply-prepayment`)
+      fetchBills()
+    } catch (e: any) {
+      alert(e.response?.data?.message ?? 'Gagal menerapkan saldo dimuka')
+    }
   }
 
   const inputCls = 'border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500'
@@ -137,6 +191,13 @@ export default function BillsPage() {
 
       {/* Filter */}
       <div className="flex flex-wrap gap-2 items-center">
+        <input
+          type="text"
+          value={filterSearch}
+          onChange={(e) => setFilterSearch(e.target.value)}
+          placeholder="Cari nama penghuni / blok / nomor..."
+          className={`${inputCls} flex-1 min-w-48`}
+        />
         <select value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))}
           className={inputCls}>
           {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -166,7 +227,7 @@ export default function BillsPage() {
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Periode</th>
               <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide">Nominal</th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
-              {isSuperAdmin && <th className="px-5 py-3" />}
+              <th className="px-5 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -195,13 +256,21 @@ export default function BillsPage() {
                     : <span className="bg-red-50 text-red-500 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">Belum Lunas</span>
                   }
                 </td>
-                {isSuperAdmin && (
-                  <td className="px-5 py-3.5 text-right">
-                    {b.status === 'unpaid' && (
-                      <button onClick={() => handleDelete(b)} className="text-xs text-red-400 hover:text-red-600 font-medium">Hapus</button>
-                    )}
-                  </td>
-                )}
+                <td className="px-5 py-3.5 text-right">
+                  {b.status === 'unpaid' && (
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        onClick={() => handleApplyPrepayment(b)}
+                        className="text-xs text-teal-600 hover:text-teal-800 font-medium whitespace-nowrap"
+                        title="Lunasi dengan saldo bayar dimuka">
+                        Pakai Saldo
+                      </button>
+                      {isSuperAdmin && (
+                        <button onClick={() => handleDelete(b)} className="text-xs text-red-400 hover:text-red-600 font-medium">Hapus</button>
+                      )}
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -270,25 +339,79 @@ export default function BillsPage() {
               {manualError && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{manualError}</p>}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Rumah</label>
-                <select value={manualForm.house_id} onChange={(e) => setManualForm({ ...manualForm, house_id: e.target.value })}
-                  className={`w-full ${inputCls}`} required>
-                  <option value="">Pilih rumah...</option>
-                  {houses.map((h) => (
-                    <option key={h.id} value={h.id}>{h.block}{h.number} — {h.current_resident?.full_name}</option>
-                  ))}
-                </select>
+                <AsyncSelect<HouseOption>
+                  value={selectedHouse}
+                  onChange={handleHouseChange}
+                  loadOptions={loadHouseOptions}
+                  defaultOptions
+                  isClearable
+                  placeholder="Ketik blok/nomor/nama penghuni..."
+                  loadingMessage={() => 'Mencari...'}
+                  noOptionsMessage={({ inputValue }) => inputValue ? 'Rumah tidak ditemukan' : 'Ketik untuk mencari'}
+                  styles={{
+                    control: (base, state) => ({
+                      ...base,
+                      borderRadius: '0.75rem',
+                      borderColor: state.isFocused ? '#15803d' : '#e5e7eb',
+                      boxShadow: state.isFocused ? '0 0 0 2px #bbf7d0' : 'none',
+                      fontSize: '0.875rem',
+                      '&:hover': { borderColor: '#15803d' },
+                    }),
+                    option: (base, state) => ({
+                      ...base,
+                      fontSize: '0.875rem',
+                      backgroundColor: state.isSelected ? '#15803d' : state.isFocused ? '#f0fdf4' : 'white',
+                      color: state.isSelected ? 'white' : '#374151',
+                    }),
+                    menu: (base) => ({ ...base, borderRadius: '0.75rem', overflow: 'hidden', zIndex: 60 }),
+                  }}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Jenis Iuran</label>
                 <select value={manualForm.fee_type_id}
-                  onChange={(e) => {
-                    const ft = feeTypes.find((f) => f.id === Number(e.target.value))
-                    setManualForm({ ...manualForm, fee_type_id: e.target.value, amount: ft ? String(ft.amount) : '' })
-                  }}
+                  onChange={(e) => { setManualForm({ ...manualForm, fee_type_id: e.target.value }); setUsePrepayment(false) }}
                   className={`w-full ${inputCls}`} required>
                   <option value="">Pilih jenis iuran...</option>
                   {feeTypes.map((f) => <option key={f.id} value={f.id}>{f.name} — {formatRupiah(f.amount)}</option>)}
                 </select>
+                {(() => {
+                  const ft = feeTypes.find((f) => f.id === Number(manualForm.fee_type_id))
+                  if (!ft) return null
+                  const saldo = prepaymentBalances[ft.id] ?? 0
+                  const cukup = saldo >= ft.amount
+                  return (
+                    <div className="mt-2 space-y-1.5">
+                      <p className="text-xs text-gray-400">
+                        Nominal: <span className="font-semibold text-gray-700">{formatRupiah(ft.amount)}</span>
+                      </p>
+                      {selectedHouse && (
+                        saldo > 0 ? (
+                          <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${cukup ? 'bg-teal-50 border-teal-100' : 'bg-amber-50 border-amber-100'}`}>
+                            <div>
+                              <p className={`text-xs font-semibold ${cukup ? 'text-teal-700' : 'text-amber-700'}`}>
+                                Saldo dimuka: {formatRupiah(saldo)}
+                              </p>
+                              <p className={`text-xs ${cukup ? 'text-teal-600' : 'text-amber-600'}`}>
+                                {cukup ? 'Cukup untuk melunasi tagihan ini' : 'Saldo tidak cukup'}
+                              </p>
+                            </div>
+                            {cukup && (
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={usePrepayment}
+                                  onChange={(e) => setUsePrepayment(e.target.checked)}
+                                  className="w-4 h-4 rounded accent-teal-600" />
+                                <span className="text-xs font-medium text-teal-700">Pakai saldo</span>
+                              </label>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">Tidak ada saldo dimuka untuk jenis iuran ini.</p>
+                        )
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -303,11 +426,6 @@ export default function BillsPage() {
                     {MONTHS.map((m) => <option key={m} value={m}>{BULAN[m]}</option>)}
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Nominal (Rp)</label>
-                <input type="number" value={manualForm.amount} onChange={(e) => setManualForm({ ...manualForm, amount: e.target.value })}
-                  className={`w-full ${inputCls}`} required min="1" />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowManual(false)}

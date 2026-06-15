@@ -3,10 +3,11 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 
 const navItems = [
-  { to: '/resident/dashboard', label: 'Beranda',        icon: '⊞' },
-  { to: '/resident/bills',     label: 'Tagihan Saya',   icon: '≡' },
-  { to: '/resident/payments',  label: 'Riwayat Bayar',  icon: '◈' },
-  { to: '/resident/expenses',  label: 'Pengeluaran RT', icon: '↗' },
+  { to: '/resident/dashboard',   label: 'Beranda',        icon: '⊞' },
+  { to: '/resident/bills',       label: 'Tagihan Saya',   icon: '≡' },
+  { to: '/resident/payments',    label: 'Riwayat Bayar',  icon: '◈' },
+  { to: '/resident/prepayments', label: 'Bayar Dimuka',   icon: '◎' },
+  { to: '/resident/expenses',    label: 'Pengeluaran RT', icon: '↗' },
 ]
 
 export default function ResidentLayout() {

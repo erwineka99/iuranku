@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import AsyncSelect from 'react-select/async'
 import api from '@/api/axios'
-import type { Payment, Bill, Resident } from '@/types'
+import type { Bill, Resident } from '@/types'
+
+interface PaymentEntry {
+  id: string
+  type: 'cash' | 'prepayment'
+  resident: { id: number; full_name: string }
+  paid_at: string
+  total_amount: number
+  notes: string | null
+  items: { bill_id: number; fee_type: string; year: number; month: number; amount: number; house?: { block: string; number: string } | null }[]
+}
 import { useAuth } from '@/context/AuthContext'
 
 type ResidentOption = { value: number; label: string }
@@ -16,12 +26,13 @@ const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2]
 
 export default function PaymentsPage() {
   const { isSuperAdmin } = useAuth()
-  const [payments, setPayments] = useState<Payment[]>([])
+  const [payments, setPayments] = useState<PaymentEntry[]>([])
   const [meta, setMeta] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [filterYear, setFilterYear] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const [filterSearch, setFilterSearch] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const [showModal, setShowModal] = useState(false)
   const [selectedResident, setSelectedResident] = useState<ResidentOption | null>(null)
@@ -47,6 +58,7 @@ export default function PaymentsPage() {
     const p = new URLSearchParams()
     if (filterYear) p.set('year', filterYear)
     if (filterMonth) p.set('month', filterMonth)
+    if (filterSearch.trim()) p.set('search', filterSearch.trim())
     return p.toString()
   }
 
@@ -57,7 +69,10 @@ export default function PaymentsPage() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchPayments() }, [filterYear, filterMonth])
+  useEffect(() => {
+    const t = setTimeout(() => fetchPayments(), filterSearch ? 400 : 0)
+    return () => clearTimeout(t)
+  }, [filterYear, filterMonth, filterSearch])
 
   function openModal() {
     setSelectedResident(null); setUnpaidBills([]); setSelectedBills([])
@@ -92,9 +107,10 @@ export default function PaymentsPage() {
     } finally { setSaving(false) }
   }
 
-  async function handleDelete(p: Payment) {
+  async function handleDelete(p: PaymentEntry) {
     if (!confirm('Batalkan pembayaran ini? Tagihan terkait akan kembali ke status belum lunas.')) return
-    try { await api.delete(`/payments/${p.id}`); fetchPayments() }
+    const numericId = p.id.replace('pay-', '')
+    try { await api.delete(`/payments/${numericId}`); fetchPayments() }
     catch (e: any) { alert(e.response?.data?.message ?? 'Gagal menghapus') }
   }
 
@@ -115,20 +131,31 @@ export default function PaymentsPage() {
 
       {/* Ringkasan */}
       {Object.keys(meta).length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Total Transaksi</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Total Entri</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{meta.total}</p>
           </div>
           <div className="bg-green-700 rounded-2xl shadow-sm p-4 text-white">
-            <p className="text-xs font-medium text-green-200 uppercase tracking-wide">Total Pemasukan</p>
+            <p className="text-xs font-medium text-green-200 uppercase tracking-wide">Tunai</p>
             <p className="text-xl font-bold mt-1">{formatRupiah(meta.total_amount)}</p>
+          </div>
+          <div className="bg-teal-600 rounded-2xl shadow-sm p-4 text-white">
+            <p className="text-xs font-medium text-teal-200 uppercase tracking-wide">Saldo Dimuka</p>
+            <p className="text-xl font-bold mt-1">{formatRupiah(meta.total_prepayment ?? 0)}</p>
           </div>
         </div>
       )}
 
       {/* Filter */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <input
+          type="text"
+          value={filterSearch}
+          onChange={(e) => setFilterSearch(e.target.value)}
+          placeholder="Cari nama penghuni / blok / nomor..."
+          className={`${inputCls} flex-1 min-w-48`}
+        />
         <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className={inputCls}>
           <option value="">Semua Tahun</option>
           {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -158,17 +185,25 @@ export default function PaymentsPage() {
               onClick={() => setExpanded(expanded === p.id ? null : p.id)}
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center text-xs font-bold text-green-800 shrink-0">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${p.type === 'prepayment' ? 'bg-teal-50 text-teal-800' : 'bg-green-50 text-green-800'}`}>
                   {p.resident.full_name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{p.resident.full_name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-gray-800">{p.resident.full_name}</p>
+                    {p.type === 'prepayment'
+                      ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100">SALDO DIMUKA</span>
+                      : <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">TUNAI</span>
+                    }
+                  </div>
                   <p className="text-xs text-gray-400">{p.paid_at} · {p.items.length} tagihan</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <p className="text-sm font-bold text-green-700">{formatRupiah(p.total_amount)}</p>
-                {isSuperAdmin && (
+                <p className={`text-sm font-bold ${p.type === 'prepayment' ? 'text-teal-600' : 'text-green-700'}`}>
+                  {formatRupiah(p.total_amount)}
+                </p>
+                {isSuperAdmin && p.type === 'cash' && (
                   <button onClick={(e) => { e.stopPropagation(); handleDelete(p) }}
                     className="text-xs text-red-400 hover:text-red-600 font-medium">Batalkan</button>
                 )}

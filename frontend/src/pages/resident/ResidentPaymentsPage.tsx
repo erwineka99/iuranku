@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import api from '@/api/axios'
-import type { ResidentPayment } from '@/types'
 
 const BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
 const BULAN_PENDEK = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
@@ -11,13 +10,22 @@ function formatRupiah(n: number) {
   return 'Rp ' + n.toLocaleString('id-ID')
 }
 
+interface PaymentEntry {
+  id: string
+  type: 'cash' | 'prepayment'
+  paid_at: string
+  total_amount: number
+  notes: string | null
+  items: { bill_id: number; fee_type: string; year: number; month: number; amount: number }[]
+}
+
 export default function ResidentPaymentsPage() {
-  const [payments, setPayments] = useState<ResidentPayment[]>([])
+  const [entries, setEntries] = useState<PaymentEntry[]>([])
   const [meta, setMeta] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [filterYear, setFilterYear] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   function load() {
     setLoading(true)
@@ -25,7 +33,7 @@ export default function ResidentPaymentsPage() {
     if (filterYear) params.year = filterYear
     if (filterMonth) params.month = filterMonth
     api.get('/resident/payments', { params })
-      .then((res) => { setPayments(res.data.data); setMeta(res.data.meta ?? {}) })
+      .then((res) => { setEntries(res.data.data); setMeta(res.data.meta ?? {}) })
       .finally(() => setLoading(false))
   }
 
@@ -37,17 +45,22 @@ export default function ResidentPaymentsPage() {
     <div className="space-y-5 max-w-2xl">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Riwayat Pembayaran</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Semua transaksi pembayaran yang sudah dicatat</p>
+        <p className="text-sm text-gray-400 mt-0.5">Pembayaran tunai dan pemakaian saldo dimuka</p>
       </div>
 
       {/* Ringkasan */}
-      <div className="bg-green-700 rounded-2xl p-4 text-white shadow-sm flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium text-green-200 uppercase tracking-wide">Total Pembayaran</p>
-          <p className="text-sm mt-0.5 text-green-100">{meta.total ?? 0} transaksi</p>
+      {!loading && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-green-700 rounded-2xl p-4 text-white shadow-sm">
+            <p className="text-xs font-medium text-green-200 uppercase tracking-wide">Bayar Tunai</p>
+            <p className="text-xl font-bold mt-1">{formatRupiah(meta.total_amount ?? 0)}</p>
+          </div>
+          <div className="bg-teal-600 rounded-2xl p-4 text-white shadow-sm">
+            <p className="text-xs font-medium text-teal-200 uppercase tracking-wide">Pakai Saldo Dimuka</p>
+            <p className="text-xl font-bold mt-1">{formatRupiah(meta.total_prepayment ?? 0)}</p>
+          </div>
         </div>
-        <p className="text-xl font-bold">{formatRupiah(meta.total_amount ?? 0)}</p>
-      </div>
+      )}
 
       {/* Filter */}
       <div className="flex gap-2 flex-wrap">
@@ -63,35 +76,54 @@ export default function ResidentPaymentsPage() {
         </select>
       </div>
 
-      {/* Daftar accordion */}
+      {/* Daftar */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50 overflow-hidden">
         {loading ? (
-          <div className="px-5 py-10 text-center text-gray-400 text-sm"><span className="animate-spin inline-block mr-2">◌</span>Memuat data...</div>
-        ) : payments.length === 0 ? (
+          <div className="px-5 py-10 text-center text-gray-400 text-sm">
+            <span className="animate-spin inline-block mr-2">◌</span>Memuat data...
+          </div>
+        ) : entries.length === 0 ? (
           <div className="px-5 py-10 text-center">
             <p className="text-2xl mb-2">📭</p>
             <p className="text-sm font-medium text-gray-600">Belum ada riwayat pembayaran.</p>
             <p className="text-xs text-gray-400 mt-1">Pembayaranmu akan muncul di sini setelah dicatat admin.</p>
           </div>
-        ) : payments.map((p) => (
+        ) : entries.map((p) => (
           <div key={p.id}>
             <button
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/80 transition-colors"
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/80 transition-colors text-left"
               onClick={() => setExpanded(expanded === p.id ? null : p.id)}
             >
-              <div className="text-left">
-                <p className="text-sm font-semibold text-gray-800">{p.paid_at}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{p.items.length} tagihan dibayar</p>
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-gray-800">{p.paid_at}</p>
+                    {p.type === 'prepayment' ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-100">
+                        SALDO DIMUKA
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100">
+                        TUNAI
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{p.items.length} tagihan</p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-green-700">{formatRupiah(p.total_amount)}</span>
+                <span className={`text-sm font-bold ${p.type === 'prepayment' ? 'text-teal-600' : 'text-green-700'}`}>
+                  {formatRupiah(p.total_amount)}
+                </span>
                 <span className="text-gray-300 text-xs">{expanded === p.id ? '▲' : '▼'}</span>
               </div>
             </button>
 
             {expanded === p.id && (
               <div className="border-t border-gray-50 px-5 pb-4 bg-gray-50/50">
-                {p.notes && <p className="text-xs text-gray-400 pt-2 mb-2">Catatan: {p.notes}</p>}
+                {p.notes && (
+                  <p className="text-xs text-gray-400 pt-2 mb-2">{p.notes}</p>
+                )}
                 <table className="w-full text-xs mt-2">
                   <thead>
                     <tr className="text-gray-400 border-b border-gray-100">

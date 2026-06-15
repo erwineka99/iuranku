@@ -31,6 +31,8 @@ export default function ResidentsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  const [ktpPreview, setKtpPreview] = useState<{ name: string; url: string } | null>(null)
+
   function fetchResidents() {
     setLoading(true)
     const params = filterType ? `?resident_type=${filterType}` : ''
@@ -108,14 +110,15 @@ export default function ResidentsPage() {
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Tipe</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Rumah</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Tunggakan</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wide">KTP</th>
               <th className="px-5 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={6} className="px-5 py-10 text-center text-gray-400 text-sm"><span className="animate-spin inline-block mr-2">◌</span>Memuat data...</td></tr>
+              <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400 text-sm"><span className="animate-spin inline-block mr-2">◌</span>Memuat data...</td></tr>
             ) : residents.length === 0 ? (
-              <tr><td colSpan={6} className="px-5 py-10 text-center">
+              <tr><td colSpan={7} className="px-5 py-10 text-center">
                 <p className="text-2xl mb-2">🏘️</p>
                 <p className="text-sm font-medium text-gray-600">Belum ada penghuni.</p>
                 <p className="text-xs text-gray-400 mt-1">Tambah penghuni lewat tombol di atas ya.</p>
@@ -151,6 +154,20 @@ export default function ResidentsPage() {
                     : <span className="text-xs font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full">Lunas ✓</span>
                   }
                 </td>
+                <td className="px-5 py-3.5 text-center">
+                  {r.ktp_photo_url
+                    ? (
+                      <button
+                        onClick={() => setKtpPreview({ name: r.full_name, url: r.ktp_photo_url! })}
+                        className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 font-medium px-2.5 py-1 rounded-lg transition-colors"
+                        title="Lihat foto KTP">
+                        Lihat
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )
+                  }
+                </td>
                 <td className="px-5 py-3.5 text-right space-x-3">
                   <button onClick={() => openEdit(r)} className="text-xs text-blue-500 hover:text-blue-700 font-medium">Edit</button>
                   {isSuperAdmin && (
@@ -162,6 +179,36 @@ export default function ResidentsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Lightbox KTP */}
+      {ktpPreview && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setKtpPreview(null)}>
+          <div className="relative max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-white font-semibold text-sm">{ktpPreview.name}</p>
+                <p className="text-gray-400 text-xs">Foto KTP</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <a href={ktpPreview.url} target="_blank" rel="noreferrer"
+                  className="text-xs text-green-400 hover:text-green-300 font-medium"
+                  onClick={(e) => e.stopPropagation()}>
+                  Buka di tab baru ↗
+                </a>
+                <button onClick={() => setKtpPreview(null)}
+                  className="text-gray-400 hover:text-white text-2xl leading-none">×</button>
+              </div>
+            </div>
+            <img
+              src={ktpPreview.url}
+              alt={`KTP ${ktpPreview.name}`}
+              className="w-full rounded-xl shadow-2xl object-contain max-h-[75vh]"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
@@ -210,6 +257,24 @@ export default function ResidentsPage() {
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">
                   Foto KTP <span className="text-gray-300 font-normal">{editTarget ? '(kosongkan jika tidak diubah)' : '(opsional)'}</span>
                 </label>
+                {/* Preview foto KTP yang sudah tersimpan */}
+                {editTarget?.ktp_photo_url && !form.ktp_photo && (
+                  <div className="mb-2 relative group w-fit">
+                    <img src={editTarget.ktp_photo_url} alt="KTP"
+                      className="h-24 rounded-lg object-cover border border-gray-200 cursor-pointer"
+                      onClick={() => setKtpPreview({ name: editTarget.full_name, url: editTarget.ktp_photo_url! })} />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
+                      <span className="text-white text-xs font-medium">Klik untuk lihat</span>
+                    </div>
+                  </div>
+                )}
+                {/* Preview foto baru yang dipilih */}
+                {form.ktp_photo && (
+                  <div className="mb-2">
+                    <img src={URL.createObjectURL(form.ktp_photo)} alt="Preview KTP"
+                      className="h-24 rounded-lg object-cover border border-green-200" />
+                  </div>
+                )}
                 <input type="file" accept="image/*" onChange={(e) => setForm({ ...form, ktp_photo: e.target.files?.[0] ?? null })}
                   className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gray-100 file:text-gray-600 hover:file:bg-gray-200" />
               </div>

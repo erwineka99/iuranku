@@ -25,6 +25,7 @@ import UsersPage from '@/pages/UsersPage'
 import ResidentDashboardPage from '@/pages/resident/ResidentDashboardPage'
 import ResidentBillsPage from '@/pages/resident/ResidentBillsPage'
 import ResidentPaymentsPage from '@/pages/resident/ResidentPaymentsPage'
+import ResidentPrepaymentPage from '@/pages/resident/ResidentPrepaymentPage'
 import ResidentExpensesPage from '@/pages/resident/ResidentExpensesPage'
 
 function RootRedirect() {
@@ -64,10 +65,11 @@ export default function AppRoutes() {
       {/* area penghuni */}
       <Route element={<RequireResident />}>
         <Route element={<ResidentLayout />}>
-          <Route path="/resident/dashboard" element={<ResidentDashboardPage />} />
-          <Route path="/resident/bills" element={<ResidentBillsPage />} />
-          <Route path="/resident/payments" element={<ResidentPaymentsPage />} />
-          <Route path="/resident/expenses" element={<ResidentExpensesPage />} />
+          <Route path="/resident/dashboard"    element={<ResidentDashboardPage />} />
+          <Route path="/resident/bills"        element={<ResidentBillsPage />} />
+          <Route path="/resident/payments"     element={<ResidentPaymentsPage />} />
+          <Route path="/resident/prepayments"  element={<ResidentPrepaymentPage />} />
+          <Route path="/resident/expenses"     element={<ResidentExpensesPage />} />
         </Route>
       </Route>
 
